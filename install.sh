@@ -1,4 +1,17 @@
 #!/bin/bash
+
+# ==============================================================================
+# INSTALADOR MAESTRO DE RDP Client 2026 v7.6 (Versión Definitiva)
+# ==============================================================================
+# Esta es la versión final del proyecto.
+# - Suprime la salida detallada de 'apt' para una instalación más limpia.
+# - Añade un mensaje de advertencia sobre el tiempo de instalación.
+# - Mantiene todas las características anteriores.
+#
+# Debe ejecutarse con privilegios de root (sudo).
+# ==============================================================================
+
+# --- Configuración y Seguridad ---
 set -e
 
 APP_USER="rdp"
@@ -51,13 +64,19 @@ log_info "Aviso: El script ha sido probado sobre una instalación mínima de Deb
 # ==============================================================================
 log_info "Verificando dependencias del sistema..."
 REQUIRED_PACKAGES=(xserver-xorg xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
-log_info "Actualizando índice de paquetes (esto puede tardar un momento)..."
-apt-get update > /dev/null
+log_info "Actualizando índice de paquetes..."
+apt-get update >/dev/null 2>&1
+
 log_info "Comprobando e instalando paquetes necesarios..."
+# --- ¡MEJORA! --- Mensaje de advertencia de tiempo
+log_warn "Esto puede demorar unos minutos dependiendo de su conexión a internet."
 for pkg in "${REQUIRED_PACKAGES[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-        log_warn "Paquete '$pkg' no encontrado. Instalando..."
-        apt-get install -y "$pkg" > /dev/null
+        log_info "Instalando $pkg..."
+        # --- ¡MEJORA! --- Salida de apt suprimida
+        apt-get install -y "$pkg" >/dev/null 2>&1
+    else
+        log_info "$pkg ya está instalado."
     fi
 done
 log_info "Todas las dependencias del sistema están presentes."
@@ -85,9 +104,12 @@ fi
 # PASO 3: INSTALACIÓN DE LA APLICACIÓN RDP Client 2026
 # ==============================================================================
 log_info "Iniciando la instalación de la aplicación RDP Client 2026..."
-if id -u "$APP_USER" &>/dev/null; then log_warn "El usuario '$APP_USER' ya existe."; else
+if id -u "$APP_USER" &>/dev/null; then
+    log_warn "El usuario '$APP_USER' ya existe."
+else
     log_info "Creando usuario del sistema '$APP_USER' con home en $CONFIG_DEST_DIR...";
-    /usr/sbin/useradd --system --create-home --shell /bin/bash --home-dir "$CONFIG_DEST_DIR"; fi
+    /usr/sbin/useradd --system --create-home --shell /bin/bash --home-dir "$CONFIG_DEST_DIR" "$APP_USER"
+fi
 
 log_info "Configurando sudo para el usuario 'rdp'..."
 SUDOERS_RDP_FILE="/etc/sudoers.d/010_rdp_user_permissions"
@@ -131,7 +153,7 @@ if wget --quiet -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
         echo "GRUB_TIMEOUT=5" >> /etc/default/grub
     fi
     log_info "Actualizando la configuración de GRUB..."
-    /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg
+    /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
     log_info "Fondo de arranque y timeout actualizados."
 else
     log_warn "No se pudo descargar el logo para GRUB. Se omitirá este paso."
@@ -147,7 +169,7 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "7.4.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "7.6.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 # index.js
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
