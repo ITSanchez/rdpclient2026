@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v10.0 (Versión Final Definitiva)
+# INSTALADOR MAESTRO DE RDP Client 2026 v11.0 (Estrategia Remmina)
 # ==============================================================================
-# Esta versión implementa la lógica correcta final, usando 'xinit' para
-# lanzar el entorno gráfico, basado en el diagnóstico final.
+# Esta es la versión final del proyecto.
+# - Abandona xfreerdp y adopta Remmina como cliente RDP para máxima
+#   compatibilidad.
+# - El script rdp.sh ahora genera un archivo de conexión .remmina al vuelo.
 #
 # Debe ejecutarse con privilegios de root (sudo).
 # ==============================================================================
@@ -37,10 +39,10 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # ==============================================================================
 # PASO 0: VALIDACIONES PREVIAS
 # ==============================================================================
-if [ "$(id -u)" -ne 0 ]; then log_error "Este script debe ejecutarse como root. Por favor, use 'sudo ./install.sh'"; fi
+if [ "$(id -u)" -ne 0 ]; then log_error "Este script debe ejecutarse como root."; fi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
-    if ! ([ "$ID" == "debian" ] && [ "$VERSION_ID" == "12" ]); then log_error "Este instalador está diseñado para Debian 12.x (bookworm)."; fi
+    if ! ([ "$ID" == "debian" ] && [ "$VERSION_ID" == "12" ]); then log_error "Este instalador está diseñado para Debian 12.x."; fi
 else
     log_error "No se pudo verificar la versión del sistema operativo."
 fi
@@ -50,17 +52,19 @@ log_info "Sistema operativo verificado: Debian 12 (bookworm)."
 # PASO 1: INSTALACIÓN DE DEPENDENCIAS
 # ==============================================================================
 log_info "Verificando dependencias del sistema..."
-REQUIRED_PACKAGES=(xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
+# --- ¡CAMBIO CLAVE! --- Añadimos remmina y su plugin RDP
+REQUIRED_PACKAGES="xserver-xorg xinit remmina remmina-plugin-rdp sudo wget ca-certificates grub2-common"
 log_info "Actualizando índice de paquetes..."
 apt-get update >/dev/null 2>&1
 log_info "Instalando paquetes necesarios..."
 log_warn "Esto puede demorar unos minutos..."
-apt-get install -y ${REQUIRED_PACKAGES[@]} >/dev/null 2>&1
+apt-get install -y $REQUIRED_PACKAGES >/dev/null 2>&1
 log_info "Todas las dependencias del sistema están presentes."
 
 # ==============================================================================
-# PASO 2: INSTALACIÓN DE NODE.JS (SI ES NECESARIO)
+# PASO 2: INSTALACIÓN DE NODE.JS
 # ==============================================================================
+# (Sin cambios)
 log_info "Verificando instalación de Node.js..."
 if command -v node &> /dev/null; then log_info "Node.js ya está instalado (versión $(node -v))."; else
     log_warn "Node.js no encontrado. Procediendo con la instalación..."
@@ -73,22 +77,20 @@ fi
 # ==============================================================================
 # PASO 3: INSTALACIÓN DE LA APLICACIÓN
 # ==============================================================================
+# (Sin cambios)
 log_info "Iniciando la instalación de la aplicación RDP Client 2026..."
 if id -u "$APP_USER" &>/dev/null; then log_warn "El usuario '$APP_USER' ya existe."; else
     log_info "Creando usuario del sistema '$APP_USER'...";
     /usr/sbin/useradd --system --create-home --shell /bin/bash --home-dir "$CONFIG_DEST_DIR" "$APP_USER"
 fi
-
 log_info "Configurando sudo para el usuario 'rdp'..."
 SUDOERS_RDP_FILE="/etc/sudoers.d/010_rdp_user_permissions"
 echo "${APP_USER} ALL=(ALL) NOPASSWD: /home/rdp/rdp.sh, /sbin/shutdown, /sbin/reboot" > "$SUDOERS_RDP_FILE"
 /bin/chmod 0440 "$SUDOERS_RDP_FILE"
-
 log_info "Creando directorios y restableciendo contraseña de admin..."
 /bin/mkdir -p "$PUBLIC_DIR"
 echo "Rdpclient2026" > "$ADMIN_CONFIG_FILE"
 /bin/chown root:root "$ADMIN_CONFIG_FILE"; /bin/chmod 600 "$ADMIN_CONFIG_FILE"
-
 log_info "Creando el Mensaje del Día personalizado..."
 cat << 'EOF' > /etc/motd
 ############################################################################
@@ -101,11 +103,11 @@ EOF
 # ==============================================================================
 # PASO 4: BRANDING DEL SISTEMA
 # ==============================================================================
+# (Sin cambios)
 log_info "Descargando y configurando el fondo de arranque (GRUB)..."
-if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
+if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW" && [ -f "$LOGO_PATH_GRUB" ]; then
     log_info "Configurando GRUB para usar la imagen de fondo y timeout de 5s..."
-    sed -i -e 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' \
-           -e 's/^#\?GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/g' /etc/default/grub
+    sed -i -e 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' -e 's/^#\?GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/g' /etc/default/grub
     log_info "Actualizando la configuración de GRUB..."
     /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
     log_info "Fondo de arranque y timeout actualizados."
@@ -113,7 +115,7 @@ else
     log_warn "No se pudo descargar el logo para GRUB."
 fi
 log_info "Descargando el logo para la interfaz web..."
-if ! wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW"; then
+if ! (wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW" && [ -f "$LOGO_PATH_WEB" ]); then
     log_warn "No se pudo descargar el logo para la web."
 fi
 
@@ -123,12 +125,12 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "10.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "11.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
-# index.js (sin cambios)
-#... (Omitido por brevedad, es el mismo de la v9.3)
+# index.js (Sin cambios)
+# ... (Omitido por brevedad, es el mismo de la v9.3)
 
-# --- rdp.sh (LA CORRECCIÓN FINAL) ---
+# --- rdp.sh (¡REESCRITO PARA USAR REMMINA!) ---
 cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
 #!/bin/bash
 if [ "$(id -u)" -ne 0 ]; then clear; echo "Error: Este script debe ser ejecutado con privilegios de root (sudo)."; sleep 20; exit 1; fi
@@ -140,18 +142,31 @@ while true; do
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "rdp.pass.enc" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then clear; echo "Error al descifrar la contraseña."; sleep 10; exit 1; fi
     
-    # Construir el comando base
-    XFREERDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS /v:$RDP_SERVER /f /cert:ignore"
+    # Crear archivo de conexión temporal para Remmina
+    REMMINA_FILE="/tmp/rdp_connection.remmina"
     
-    # Añadir el puerto si es necesario, usando la sintaxis /port:
-    if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then
-        XFREERDP_CMD="$XFREERDP_CMD /port:$RDP_PORT"
-    fi
+cat > "$REMMINA_FILE" << EOL
+[remmina]
+protocol=RDP
+server=${RDP_SERVER}
+port=${RDP_PORT}
+username=${RDP_USER}
+password=${RDP_PASS}
+fullscreen=1
+colordepth=32
+quality=0
+security=nla
+ignore-certificate=1
+disable-auth-loop=1
+EOL
 
-    # Envolver el comando final en xinit
-    /usr/bin/xinit $XFREERDP_CMD -- :1
+    # Ejecutar Remmina con el archivo de conexión
+    # Usamos xinit para asegurar un entorno gráfico limpio
+    /usr/bin/xinit /usr/bin/remmina -- -c "$REMMINA_FILE" -- :1
 
-    unset RDP_PASS
+    # Limpieza
+    /bin/rm -f "$REMMINA_FILE"; unset RDP_PASS
+
     clear; echo "================================="; echo "        SESIÓN FINALIZADA"; echo "================================="; echo ""; echo "  [1] Volver a conectar"; echo "  [2] Apagar el equipo"; echo ""; echo "================================="
     read -n 1 -p "Seleccione una opción: " opcion; echo ""
     case $opcion in
@@ -161,7 +176,8 @@ while true; do
     esac
 done; exit 0
 EOF
-# .bash_profile
+
+# .bash_profile (Sin cambios)
 cat << 'EOF' > "${CONFIG_DEST_DIR}/.bash_profile"
 if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
   if [ -f /home/rdp/rdp.sh ]; then /usr/bin/sudo /home/rdp/rdp.sh; fi
@@ -214,5 +230,5 @@ log_info "Credenciales de acceso web por defecto:"
 log_info "  Usuario:    rdpadmin"
 log_info "  Contraseña: Rdpclient2026"
 log_info ""
-log_info "Una vez configurado desde la web, ${RED}REINICIA EL EQUIPO${NC} para ver todos los cambios."
+log_info "Una vez configurado desde la web, ${RED}REINICIA EL EQUIPO${NC}."
 echo ""
