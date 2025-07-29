@@ -1,11 +1,9 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v8.0 (Versión Final)
+# INSTALADOR MAESTRO DE RDP Client 2026 v8.2 (Corrección Final de Puerto)
 # ==============================================================================
-# Esta es la versión final del proyecto.
-# - Corrige la lógica de conexión a puertos RDP no estándar en rdp.sh.
-# - Mantiene todas las características anteriores.
+# Esta versión corrige la lógica de conexión a puertos no estándar en rdp.sh.
 #
 # Debe ejecutarse con privilegios de root (sudo).
 # ==============================================================================
@@ -55,7 +53,7 @@ log_info "Sistema operativo verificado: Debian 12 (bookworm)."
 # PASO 1: INSTALACIÓN DE DEPENDENCIAS
 # ==============================================================================
 log_info "Verificando dependencias del sistema..."
-REQUIRED_PACKAGES=(xserver-xorg xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
+REQUIRED_PACKAGES=(xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
 log_info "Actualizando índice de paquetes..."
 apt-get update >/dev/null 2>&1
 log_info "Instalando paquetes necesarios..."
@@ -137,7 +135,7 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "8.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "8.2.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 # index.js (sin cambios)
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
@@ -299,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 EOF
-# --- rdp.sh (Corregido para usar /port) ---
+# rdp.sh y .bash_profile
 cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
 #!/bin/bash
 if [ "$(id -u)" -ne 0 ]; then clear; echo "Error: Este script debe ser ejecutado con privilegios de root (sudo)."; sleep 20; exit 1; fi
@@ -310,13 +308,10 @@ while true; do
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "rdp.pass.enc" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then clear; echo "Error al descifrar la contraseña."; sleep 10; exit 1; fi
-    
-    # Lógica de conexión mejorada
     RDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS /v:$RDP_SERVER /f /cert:ignore"
     if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then
         RDP_CMD="$RDP_CMD /port:$RDP_PORT"
     fi
-
     WRAPPER_SCRIPT="/tmp/rdp-wrapper.sh.$$"
     echo "#!/bin/sh" > "$WRAPPER_SCRIPT" && echo "$RDP_CMD" >> "$WRAPPER_SCRIPT" && /bin/chmod +x "$WRAPPER_SCRIPT"
     /usr/bin/xinit "$WRAPPER_SCRIPT" -- :1
@@ -330,7 +325,6 @@ while true; do
     esac
 done; exit 0
 EOF
-# .bash_profile
 cat << 'EOF' > "${CONFIG_DEST_DIR}/.bash_profile"
 if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
   if [ -f /home/rdp/rdp.sh ]; then /usr/bin/sudo /home/rdp/rdp.sh; fi
