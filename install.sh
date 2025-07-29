@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v7.9 (Versión Estable y Completa)
+# INSTALADOR MAESTRO DE RDP Client 2026 v7.9 (Versión a Prueba de Fallos)
 # ==============================================================================
-# Esta versión corrige un error de generación anterior que dejó el script
-# incompleto. Se basa en la última lógica estable y funcional.
+# Esta es la versión final del proyecto.
+# - Soluciona el problema de descarga del logo añadiendo la bandera
+#   '--no-check-certificate' a wget para máxima compatibilidad.
+# - Mantiene todas las características anteriores.
 #
 # Debe ejecutarse con privilegios de root (sudo).
 # ==============================================================================
@@ -123,7 +125,8 @@ EOF
 # PASO 4: BRANDING DEL SISTEMA Y LA APLICACIÓN
 # ==============================================================================
 log_info "Descargando y configurando el fondo de arranque (GRUB)..."
-if wget --quiet -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
+# --- ¡CORRECCIÓN! --- Añadida la bandera --no-check-certificate
+if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
     log_info "Configurando GRUB para usar la imagen de fondo y timeout de 5s..."
     sed -i -e 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' \
            -e 's/^#\?GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/g' /etc/default/grub
@@ -134,7 +137,8 @@ else
     log_warn "No se pudo descargar el logo para GRUB. Se omitirá este paso."
 fi
 log_info "Descargando el logo para la interfaz web..."
-if ! wget --quiet -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW"; then
+# --- ¡CORRECCIÓN! --- Añadida la bandera --no-check-certificate
+if ! wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW"; then
     log_warn "No se pudo descargar el logo para la web."
 fi
 
