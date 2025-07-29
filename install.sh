@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v7.6 (Versión Definitiva)
+# INSTALADOR MAESTRO DE RDP Client 2026 v7.7 (Versión Robusta)
 # ==============================================================================
-# Esta es la versión final del proyecto.
-# - Suprime la salida detallada de 'apt' para una instalación más limpia.
-# - Añade un mensaje de advertencia sobre el tiempo de instalación.
+# Esta es la versión final, diseñada para máxima compatibilidad.
+# - El servicio de auto-login ahora ejecuta 'rdp.sh' directamente como ROOT,
+#   evitando problemas complejos de sudoers.
 # - Mantiene todas las características anteriores.
 #
 # Debe ejecutarse con privilegios de root (sudo).
@@ -40,123 +40,91 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # PASO 0: VALIDACIONES PREVIAS
 # ==============================================================================
 
-# 1. Comprobar si se ejecuta como root
 if [ "$(id -u)" -ne 0 ]; then
    log_error "Este script debe ejecutarse como root. Por favor, use 'sudo ./install.sh'"
 fi
-
-# 2. Comprobar si el sistema operativo es Debian 12.x
 if [ -f /etc/os-release ]; then
     . /etc/os-release
-    if [ "$ID" == "debian" ] && [ "$VERSION_ID" == "12" ]; then
-        log_info "Sistema operativo verificado: Debian 12 (bookworm)."
-    else
-        log_error "Este instalador está diseñado y probado exclusivamente para Debian 12.x (bookworm).\nLa ejecución en otros sistemas puede tener resultados inesperados."
+    if ! ([ "$ID" == "debian" ] && [ "$VERSION_ID" == "12" ]); then
+        log_error "Este instalador está diseñado para Debian 12.x (bookworm)."
     fi
 else
-    log_error "No se pudo verificar la versión del sistema operativo. Falta el archivo /etc/os-release."
+    log_error "No se pudo verificar la versión del sistema operativo."
 fi
-
-log_info "Aviso: El script ha sido probado sobre una instalación mínima de Debian 12 en modo texto."
+log_info "Sistema operativo verificado: Debian 12 (bookworm)."
 
 # ==============================================================================
-# PASO 1: VERIFICACIÓN E INSTALACIÓN DE DEPENDENCIAS
+# PASO 1: INSTALACIÓN DE DEPENDENCIAS
 # ==============================================================================
 log_info "Verificando dependencias del sistema..."
 REQUIRED_PACKAGES=(xserver-xorg xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
 log_info "Actualizando índice de paquetes..."
 apt-get update >/dev/null 2>&1
-
-log_info "Comprobando e instalando paquetes necesarios..."
-# --- ¡MEJORA! --- Mensaje de advertencia de tiempo
-log_warn "Esto puede demorar unos minutos dependiendo de su conexión a internet."
+log_info "Instalando paquetes necesarios..."
+log_warn "Esto puede demorar unos minutos..."
 for pkg in "${REQUIRED_PACKAGES[@]}"; do
     if ! dpkg -s "$pkg" >/dev/null 2>&1; then
         log_info "Instalando $pkg..."
-        # --- ¡MEJORA! --- Salida de apt suprimida
         apt-get install -y "$pkg" >/dev/null 2>&1
-    else
-        log_info "$pkg ya está instalado."
     fi
 done
 log_info "Todas las dependencias del sistema están presentes."
 
 # ==============================================================================
-# PASO 2: VERIFICACIÓN E INSTALACIÓN DE NODE.JS
+# PASO 2: INSTALACIÓN DE NODE.JS (SI ES NECESARIO)
 # ==============================================================================
+# (Esta sección no ha cambiado)
 log_info "Verificando instalación de Node.js..."
-if command -v node &> /dev/null; then
-    log_info "Node.js ya está instalado (versión $(node -v))."
-else
+if command -v node &> /dev/null; then log_info "Node.js ya está instalado (versión $(node -v))."; else
     log_warn "Node.js no encontrado. Procediendo con la instalación..."
     PICHIP=$(uname -m); if [ "$PICHIP" == "aarch64" ]; then PICHIP="arm64"; fi
-    (
-        cd /tmp; log_info "Descargando script de instalación de Node.js para $PICHIP..."
-        wget --quiet -O node-install "https://raw.githubusercontent.com/audstanley/NodeJs-Raspberry-Pi/master/build/node-install-"$PICHIP
-        chmod +x node-install; log_info "Ejecutando instalador de Node.js...";
-        ./node-install -a > /dev/null; rm -f node-install
-    )
+    ( cd /tmp; wget --quiet -O node-install "https://raw.githubusercontent.com/audstanley/NodeJs-Raspberry-Pi/master/build/node-install-"$PICHIP; chmod +x node-install; ./node-install -a > /dev/null; rm -f node-install )
     if ! command -v node &> /dev/null; then log_error "La instalación de Node.js falló."; fi
     log_info "Node.js ha sido instalado correctamente. Versión: $(node -v)"
 fi
 
 # ==============================================================================
-# PASO 3: INSTALACIÓN DE LA APLICACIÓN RDP Client 2026
+# PASO 3: INSTALACIÓN DE LA APLICACIÓN
 # ==============================================================================
 log_info "Iniciando la instalación de la aplicación RDP Client 2026..."
-if id -u "$APP_USER" &>/dev/null; then
-    log_warn "El usuario '$APP_USER' ya existe."
-else
-    log_info "Creando usuario del sistema '$APP_USER' con home en $CONFIG_DEST_DIR...";
+if id -u "$APP_USER" &>/dev/null; then log_warn "El usuario '$APP_USER' ya existe."; else
+    log_info "Creando usuario del sistema '$APP_USER'...";
     /usr/sbin/useradd --system --create-home --shell /bin/bash --home-dir "$CONFIG_DEST_DIR" "$APP_USER"
 fi
 
-log_info "Configurando sudo para el usuario 'rdp'..."
-SUDOERS_RDP_FILE="/etc/sudoers.d/010_rdp_user_permissions"
-echo "${APP_USER} ALL=(ALL) NOPASSWD: /home/rdp/rdp.sh, /sbin/shutdown, /sbin/reboot" > "$SUDOERS_RDP_FILE"
-/bin/chmod 0440 "$SUDOERS_RDP_FILE"
+# Ya no necesitamos una regla de sudoers para rdp, así que la eliminamos si existe para limpiar
+log_info "Limpiando configuraciones de sudo anteriores..."
+rm -f /etc/sudoers.d/010_rdp_user_permissions
 
+# Resto de la configuración
 log_info "Creando directorios y restableciendo contraseña de admin..."
 /bin/mkdir -p "$PUBLIC_DIR"
 echo "Rdpclient2026" > "$ADMIN_CONFIG_FILE"
 /bin/chown root:root "$ADMIN_CONFIG_FILE"; /bin/chmod 600 "$ADMIN_CONFIG_FILE"
 
-log_info "Creando el Mensaje del Día personalizado en /etc/motd..."
+# MOTD
+log_info "Creando el Mensaje del Día personalizado..."
 cat << 'EOF' > /etc/motd
 
 ############################################################################
-#                                                                          #
 #                       RDP Client 2026                                    #
 #       https://sourceforge.net/projects/rdpclient/                        #
-#                                                                          #
 #               Creado por Guillermo Sanchez                               #
-#               gsanchez@itsanchez.com.ar                                  #
-#                                                                          #
 ############################################################################
 
 EOF
 
 # ==============================================================================
-# PASO 4: BRANDING DEL SISTEMA Y LA APLICACIÓN
+# PASO 4: BRANDING Y CONFIGURACIÓN DEL SISTEMA
 # ==============================================================================
 log_info "Descargando y configurando el fondo de arranque (GRUB)..."
 if wget --quiet -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
-    log_info "Configurando GRUB para usar la imagen de fondo y timeout de 5s..."
-    if grep -q "^#\?GRUB_BACKGROUND" /etc/default/grub; then
-        /bin/sed -i 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' /etc/default/grub
-    else
-        echo "GRUB_BACKGROUND=\"$LOGO_PATH_GRUB\"" >> /etc/default/grub
-    fi
-    if grep -q "^#\?GRUB_TIMEOUT" /etc/default/grub; then
-        /bin/sed -i 's/^#\?GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/g' /etc/default/grub
-    else
-        echo "GRUB_TIMEOUT=5" >> /etc/default/grub
-    fi
-    log_info "Actualizando la configuración de GRUB..."
+    sed -i -e 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' \
+           -e 's/^#\?GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/g' /etc/default/grub
     /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
     log_info "Fondo de arranque y timeout actualizados."
 else
-    log_warn "No se pudo descargar el logo para GRUB. Se omitirá este paso."
+    log_warn "No se pudo descargar el logo para GRUB. Se omitirá."
 fi
 log_info "Descargando el logo para la interfaz web..."
 if ! wget --quiet -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW"; then
@@ -169,15 +137,15 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "7.6.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "7.7.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
-# index.js
+# index.js (Actualizado para el nuevo método de autologin)
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
 const fsSync = require('fs');
-const path =require('path');
+const path = require('path');
 const app = express(), PORT = 3000, LINUX_USER = 'rdp', CONFIG_DEST_DIR = `/home/${LINUX_USER}`, RDP_INI_PATH = path.join(CONFIG_DEST_DIR, 'rdp.ini'), ADMIN_CONFIG_FILE = path.join(__dirname, 'admin.conf'), HOSTS_FILE = '/etc/hosts';
 app.use(express.static('public')); app.use(express.json());
 const runCommand = (command) => new Promise((resolve, reject) => { exec(command, (error, stdout, stderr) => { if (error) { console.error(`Error en comando: ${command}\n${stderr}`); return reject(new Error(`Falló un comando del sistema.`)); } resolve(stdout.trim()); }); });
@@ -188,7 +156,20 @@ app.post('/change-admin-password', async (req, res) => { if (!req.body.newPasswo
 app.post('/reboot', (req, res) => { res.status(200).json({ message: 'Comando de reinicio enviado...' }); setTimeout(() => { runCommand('/sbin/reboot').catch(err => console.error("Fallo al reiniciar:", err)); }, 1000); });
 app.get('/get-hostname', async (req, res) => { try { const hostname = await runCommand('hostname'); res.status(200).json({ hostname }); } catch (error) { res.status(500).json({ message: 'No se pudo obtener el hostname.' }); } });
 app.post('/change-hostname', async (req, res) => { const { newHostname } = req.body; if (!newHostname || !/^[a-zA-Z0-9-]+$/.test(newHostname)) { return res.status(400).json({ message: 'Hostname inválido.' }); } try { const oldHostname = await runCommand('hostname'); await runCommand(`/bin/hostnamectl set-hostname ${newHostname}`); let hostsContent = await fs.readFile(HOSTS_FILE, 'utf8'); const regex = new RegExp(`(127\\.0\\.1\\.1\\s+)${oldHostname}`, 'g'); hostsContent = hostsContent.replace(regex, `$1${newHostname}`); await fs.writeFile(HOSTS_FILE, hostsContent); res.status(200).json({ message: `Hostname cambiado a '${newHostname}'.` }); } catch (error) { res.status(500).json({ message: 'Error al cambiar el hostname.' }); } });
-async function configureAutologin(mode) { const overrideDir = `/etc/systemd/system/getty@tty1.service.d`, overrideFile = path.join(overrideDir, 'override.conf'); if (mode === 'text') { const overrideContent = `[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin ${LINUX_USER} --noclear %I $TERM\n`; await runCommand(`/bin/mkdir -p ${overrideDir}`); await fs.writeFile(overrideFile, overrideContent); } else { if (fsSync.existsSync(overrideFile)) { await runCommand(`/bin/rm ${overrideFile}`); } } await runCommand(`/bin/systemctl daemon-reload`); }
+async function configureAutologin(mode) { 
+    const overrideDir = `/etc/systemd/system/getty@tty1.service.d`;
+    const overrideFile = path.join(overrideDir, 'override.conf');
+    await runCommand(`/bin/mkdir -p ${overrideDir}`);
+    if (mode === 'text') {
+        const overrideContent = `[Service]\nExecStart=\nExecStart=-/bin/bash /home/rdp/rdp.sh\nStandardInput=tty\nTTYPath=/dev/tty1`;
+        await fs.writeFile(overrideFile, overrideContent);
+    } else { 
+        // Si se deshabilita, se vuelve al login normal de rdp
+        const overrideContent = `[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin ${LINUX_USER} --noclear %I $TERM`;
+        await fs.writeFile(overrideFile, overrideContent);
+    } 
+    await runCommand(`/bin/systemctl daemon-reload`); 
+}
 async function setConfigFileOwnership() { return runCommand(`/bin/chown -R ${LINUX_USER}:${LINUX_USER} ${CONFIG_DEST_DIR}`); }
 app.listen(PORT, '0.0.0.0', () => { console.log(`Backend de RDP Client 2026 escuchando en http://0.0.0.0:${PORT}`); });
 EOF
@@ -358,11 +339,9 @@ while true; do
     esac
 done; exit 0
 EOF
-cat << 'EOF' > "${CONFIG_DEST_DIR}/.bash_profile"
-if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-  if [ -f /home/rdp/rdp.sh ]; then /usr/bin/sudo /home/rdp/rdp.sh; fi
-fi
-EOF
+# --- ¡NUEVO MÉTODO! --- El .bash_profile ya no es necesario, el servicio lo llama directamente.
+# Creamos un archivo vacío para limpiar instalaciones anteriores.
+> "${CONFIG_DEST_DIR}/.bash_profile"
 
 # Asignar permisos y dependencias
 log_info "Asignando permisos e instalando dependencias de Node.js..."
@@ -370,13 +349,14 @@ log_info "Asignando permisos e instalando dependencias de Node.js..."
 /bin/chmod 755 "${CONFIG_DEST_DIR}/rdp.sh"
 (cd "$APP_DIR" && /usr/bin/npm install --production --silent)
 
-# Crear y habilitar el servicio Systemd
+# --- ¡LÓGICA MEJORADA! --- Crear y habilitar el servicio Systemd para Autologin
 log_info "Creando y habilitando el servicio systemd..."
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 cat << EOF > "$SERVICE_FILE"
 [Unit]
 Description=Backend para RDP Client 2026
 After=network.target
+
 [Service]
 Type=simple
 User=root
@@ -388,9 +368,24 @@ RestartSec=10
 StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=${SERVICE_NAME}
+
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Crear/modificar el servicio de autologin para que llame al script como root
+# Esto reemplaza la necesidad de .bash_profile y sudoers.
+AUTOLOGIN_SERVICE_DIR="/etc/systemd/system/getty@tty1.service.d"
+AUTOLOGIN_SERVICE_FILE="${AUTOLOGIN_SERVICE_DIR}/override.conf"
+/bin/mkdir -p "$AUTOLOGIN_SERVICE_DIR"
+cat << EOF > "$AUTOLOGIN_SERVICE_FILE"
+[Service]
+ExecStart=
+ExecStart=-/bin/bash /home/rdp/rdp.sh
+StandardInput=tty
+TTYPath=/dev/tty1
+EOF
+
 /bin/systemctl daemon-reload
 /bin/systemctl enable "${SERVICE_NAME}.service"
 /bin/systemctl restart "${SERVICE_NAME}.service"
