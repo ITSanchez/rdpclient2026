@@ -1,12 +1,10 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v9.0 (Solución de Drivers Gráficos)
+# INSTALADOR MAESTRO DE RDP Client 2026 v9.1 (Versión a Prueba de Fallos)
 # ==============================================================================
-# Esta es la versión final del proyecto.
-# - Asegura la instalación del paquete 'xserver-xorg-video-all' para
-#   resolver los errores de "driver missing" y "TLS connect failed".
-# - Mantiene todas las características anteriores.
+# Esta versión implementa una lógica de instalación de dependencias más robusta
+# para solucionar el fallo en la descarga de imágenes y añade verificaciones.
 #
 # Debe ejecutarse con privilegios de root (sudo).
 # ==============================================================================
@@ -39,37 +37,29 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # ==============================================================================
 # PASO 0: VALIDACIONES PREVIAS
 # ==============================================================================
-if [ "$(id -u)" -ne 0 ]; then
-   log_error "Este script debe ejecutarse como root. Por favor, use 'sudo ./install.sh'"
-fi
+if [ "$(id -u)" -ne 0 ]; then log_error "Este script debe ejecutarse como root. Por favor, use 'sudo ./install.sh'"; fi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
-    if ! ([ "$ID" == "debian" ] && [ "$VERSION_ID" == "12" ]); then
-        log_error "Este instalador está diseñado para Debian 12.x (bookworm)."
-    fi
+    if ! ([ "$ID" == "debian" ] && [ "$VERSION_ID" == "12" ]); then log_error "Este instalador está diseñado para Debian 12.x (bookworm)."; fi
 else
     log_error "No se pudo verificar la versión del sistema operativo."
 fi
 log_info "Sistema operativo verificado: Debian 12 (bookworm)."
 
 # ==============================================================================
-# PASO 1: INSTALACIÓN DE DEPENDENCIAS
+# PASO 1: INSTALACIÓN DE DEPENDENCIAS (LÓGICA CORREGIDA)
 # ==============================================================================
 log_info "Verificando dependencias del sistema..."
-# --- ¡LA SOLUCIÓN! --- Añadido xserver-xorg-video-all
-REQUIRED_PACKAGES=(xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
+REQUIRED_PACKAGES="xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common"
+
 log_info "Actualizando índice de paquetes..."
 apt-get update >/dev/null 2>&1
+
 log_info "Instalando paquetes necesarios..."
 log_warn "Esto puede demorar unos minutos dependiendo de su conexión a internet."
-for pkg in "${REQUIRED_PACKAGES[@]}"; do
-    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-        log_info "Instalando $pkg..."
-        apt-get install -y "$pkg" >/dev/null 2>&1
-    else
-        log_info "$pkg ya está instalado."
-    fi
-done
+# --- ¡LÓGICA CORREGIDA! --- Se instala directamente para asegurar la configuración
+apt-get install -y $REQUIRED_PACKAGES >/dev/null 2>&1
+
 log_info "Todas las dependencias del sistema están presentes."
 
 # ==============================================================================
@@ -105,20 +95,18 @@ echo "Rdpclient2026" > "$ADMIN_CONFIG_FILE"
 
 log_info "Creando el Mensaje del Día personalizado en /etc/motd..."
 cat << 'EOF' > /etc/motd
-
 ############################################################################
 #                       RDP Client 2026                                    #
 #       https://sourceforge.net/projects/rdpclient/                        #
 #               Creado por Guillermo Sanchez                               #
 ############################################################################
-
 EOF
 
 # ==============================================================================
 # PASO 4: BRANDING DEL SISTEMA Y LA APLICACIÓN
 # ==============================================================================
 log_info "Descargando y configurando el fondo de arranque (GRUB)..."
-if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
+if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW" && [ -f "$LOGO_PATH_GRUB" ]; then
     log_info "Configurando GRUB para usar la imagen de fondo y timeout de 5s..."
     sed -i -e 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' \
            -e 's/^#\?GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/g' /etc/default/grub
@@ -126,11 +114,11 @@ if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; the
     /usr/sbin/grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
     log_info "Fondo de arranque y timeout actualizados."
 else
-    log_warn "No se pudo descargar el logo para GRUB. Se omitirá este paso."
+    log_error "¡FALLO CRÍTICO! No se pudo descargar el logo para GRUB desde $LOGO_URL_RAW. Verifique la conexión a internet."
 fi
 log_info "Descargando el logo para la interfaz web..."
-if ! wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW"; then
-    log_warn "No se pudo descargar el logo para la web."
+if ! (wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW" && [ -f "$LOGO_PATH_WEB" ]); then
+    log_error "¡FALLO CRÍTICO! No se pudo descargar el logo para la web. Verifique la conexión a internet."
 fi
 
 # ==============================================================================
@@ -139,7 +127,7 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "9.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "9.1.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 # index.js
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
@@ -312,12 +300,10 @@ while true; do
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "rdp.pass.enc" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then clear; echo "Error al descifrar la contraseña."; sleep 10; exit 1; fi
-    
     RDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS /v:$RDP_SERVER /f /cert:ignore"
     if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then
         RDP_CMD="$RDP_CMD /port:$RDP_PORT"
     fi
-
     WRAPPER_SCRIPT="/tmp/rdp-wrapper.sh.$$"
     echo "#!/bin/sh" > "$WRAPPER_SCRIPT" && echo "$RDP_CMD" >> "$WRAPPER_SCRIPT" && /bin/chmod +x "$WRAPPER_SCRIPT"
     /usr/bin/xinit "$WRAPPER_SCRIPT" -- :1
