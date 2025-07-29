@@ -1,7 +1,7 @@
 # RDP Client 2026
 Converti una instalacion minima de Debian 12 en un ThingClient RDP 
 
-# Requirimientos 
+# Requerimientos
 * El equipo tiene que tener internet durante la instalalacion
 * Se debe ejecutar como **root**
 
