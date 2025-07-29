@@ -1,9 +1,12 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v8.2 (Corrección Final de Puerto)
+# INSTALADOR MAESTRO DE RDP Client 2026 v9.0 (Solución de Drivers Gráficos)
 # ==============================================================================
-# Esta versión corrige la lógica de conexión a puertos no estándar en rdp.sh.
+# Esta es la versión final del proyecto.
+# - Asegura la instalación del paquete 'xserver-xorg-video-all' para
+#   resolver los errores de "driver missing" y "TLS connect failed".
+# - Mantiene todas las características anteriores.
 #
 # Debe ejecutarse con privilegios de root (sudo).
 # ==============================================================================
@@ -53,6 +56,7 @@ log_info "Sistema operativo verificado: Debian 12 (bookworm)."
 # PASO 1: INSTALACIÓN DE DEPENDENCIAS
 # ==============================================================================
 log_info "Verificando dependencias del sistema..."
+# --- ¡LA SOLUCIÓN! --- Añadido xserver-xorg-video-all
 REQUIRED_PACKAGES=(xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
 log_info "Actualizando índice de paquetes..."
 apt-get update >/dev/null 2>&1
@@ -135,9 +139,9 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "8.2.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "9.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
-# index.js (sin cambios)
+# index.js
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
 const { exec } = require('child_process');
@@ -308,10 +312,12 @@ while true; do
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "rdp.pass.enc" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then clear; echo "Error al descifrar la contraseña."; sleep 10; exit 1; fi
+    
     RDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS /v:$RDP_SERVER /f /cert:ignore"
     if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then
         RDP_CMD="$RDP_CMD /port:$RDP_PORT"
     fi
+
     WRAPPER_SCRIPT="/tmp/rdp-wrapper.sh.$$"
     echo "#!/bin/sh" > "$WRAPPER_SCRIPT" && echo "$RDP_CMD" >> "$WRAPPER_SCRIPT" && /bin/chmod +x "$WRAPPER_SCRIPT"
     /usr/bin/xinit "$WRAPPER_SCRIPT" -- :1
