@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v7.9 (Versión a Prueba de Fallos)
+# INSTALADOR MAESTRO DE RDP Client 2026 v8.0 (Versión Final)
 # ==============================================================================
 # Esta es la versión final del proyecto.
-# - Soluciona el problema de descarga del logo añadiendo la bandera
-#   '--no-check-certificate' a wget para máxima compatibilidad.
+# - Corrige la lógica de conexión a puertos RDP no estándar en rdp.sh.
 # - Mantiene todas las características anteriores.
 #
 # Debe ejecutarse con privilegios de root (sudo).
@@ -39,7 +38,6 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 # ==============================================================================
 # PASO 0: VALIDACIONES PREVIAS
 # ==============================================================================
-
 if [ "$(id -u)" -ne 0 ]; then
    log_error "Este script debe ejecutarse como root. Por favor, use 'sudo ./install.sh'"
 fi
@@ -52,7 +50,6 @@ else
     log_error "No se pudo verificar la versión del sistema operativo."
 fi
 log_info "Sistema operativo verificado: Debian 12 (bookworm)."
-log_info "Aviso: El script ha sido probado sobre una instalación mínima de Debian 12 en modo texto."
 
 # ==============================================================================
 # PASO 1: INSTALACIÓN DE DEPENDENCIAS
@@ -89,10 +86,8 @@ fi
 # PASO 3: INSTALACIÓN DE LA APLICACIÓN RDP Client 2026
 # ==============================================================================
 log_info "Iniciando la instalación de la aplicación RDP Client 2026..."
-if id -u "$APP_USER" &>/dev/null; then
-    log_warn "El usuario '$APP_USER' ya existe."
-else
-    log_info "Creando usuario del sistema '$APP_USER' con home en $CONFIG_DEST_DIR...";
+if id -u "$APP_USER" &>/dev/null; then log_warn "El usuario '$APP_USER' ya existe."; else
+    log_info "Creando usuario del sistema '$APP_USER'...";
     /usr/sbin/useradd --system --create-home --shell /bin/bash --home-dir "$CONFIG_DEST_DIR" "$APP_USER"
 fi
 
@@ -110,13 +105,9 @@ log_info "Creando el Mensaje del Día personalizado en /etc/motd..."
 cat << 'EOF' > /etc/motd
 
 ############################################################################
-#                                                                          #
 #                       RDP Client 2026                                    #
 #       https://sourceforge.net/projects/rdpclient/                        #
-#                                                                          #
 #               Creado por Guillermo Sanchez                               #
-#               gsanchez@itsanchez.com.ar                                  #
-#                                                                          #
 ############################################################################
 
 EOF
@@ -125,7 +116,6 @@ EOF
 # PASO 4: BRANDING DEL SISTEMA Y LA APLICACIÓN
 # ==============================================================================
 log_info "Descargando y configurando el fondo de arranque (GRUB)..."
-# --- ¡CORRECCIÓN! --- Añadida la bandera --no-check-certificate
 if wget --quiet --no-check-certificate -O "$LOGO_PATH_GRUB" "$LOGO_URL_RAW"; then
     log_info "Configurando GRUB para usar la imagen de fondo y timeout de 5s..."
     sed -i -e 's,^#\?GRUB_BACKGROUND=.*,GRUB_BACKGROUND="'"$LOGO_PATH_GRUB"'",g' \
@@ -137,7 +127,6 @@ else
     log_warn "No se pudo descargar el logo para GRUB. Se omitirá este paso."
 fi
 log_info "Descargando el logo para la interfaz web..."
-# --- ¡CORRECCIÓN! --- Añadida la bandera --no-check-certificate
 if ! wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW"; then
     log_warn "No se pudo descargar el logo para la web."
 fi
@@ -148,9 +137,9 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "7.9.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "8.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
-# index.js
+# index.js (sin cambios)
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
 const { exec } = require('child_process');
@@ -310,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 EOF
-# rdp.sh y .bash_profile
+# --- rdp.sh (Corregido para usar /port) ---
 cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
 #!/bin/bash
 if [ "$(id -u)" -ne 0 ]; then clear; echo "Error: Este script debe ser ejecutado con privilegios de root (sudo)."; sleep 20; exit 1; fi
@@ -321,9 +310,13 @@ while true; do
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "rdp.pass.enc" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then clear; echo "Error al descifrar la contraseña."; sleep 10; exit 1; fi
-    RDP_CONNECTION_STRING="/v:$RDP_SERVER"
-    if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then RDP_CONNECTION_STRING="$RDP_CONNECTION_STRING:$RDP_PORT"; fi
-    RDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS $RDP_CONNECTION_STRING /f /cert:ignore"
+    
+    # Lógica de conexión mejorada
+    RDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS /v:$RDP_SERVER /f /cert:ignore"
+    if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then
+        RDP_CMD="$RDP_CMD /port:$RDP_PORT"
+    fi
+
     WRAPPER_SCRIPT="/tmp/rdp-wrapper.sh.$$"
     echo "#!/bin/sh" > "$WRAPPER_SCRIPT" && echo "$RDP_CMD" >> "$WRAPPER_SCRIPT" && /bin/chmod +x "$WRAPPER_SCRIPT"
     /usr/bin/xinit "$WRAPPER_SCRIPT" -- :1
@@ -337,6 +330,7 @@ while true; do
     esac
 done; exit 0
 EOF
+# .bash_profile
 cat << 'EOF' > "${CONFIG_DEST_DIR}/.bash_profile"
 if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
   if [ -f /home/rdp/rdp.sh ]; then /usr/bin/sudo /home/rdp/rdp.sh; fi
