@@ -15,7 +15,9 @@ Utulizar el comando:
 http://IP-SERVIDOR:3000
 
 Credenciales de acceso web por defecto:
+
 Usuario:    **rdpadmin**
+
 Contraseña: **Rdpclient2026**
 
 # Paquetes que se deben tener instalados en Debian12
