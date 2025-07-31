@@ -1,11 +1,10 @@
 #!/bin/bash
 
 # ==============================================================================
-# INSTALADOR MAESTRO DE RDP Client 2026 v13.0 (Versión Final Definitiva)
+# INSTALADOR MAESTRO DE RDP Client 2026 v13.1 (Versión Final Definitiva)
 # ==============================================================================
 # Esta es la versión final del proyecto.
-# - Añade un selector de modo de seguridad (NLA/RDP) en la web.
-# - El script rdp.sh adapta el comando de conexión según la configuración.
+# - Corrige un error que ocurría si /etc/sudoers.d no existía.
 # - Mantiene todas las características anteriores.
 #
 # Debe ejecutarse con privilegios de root (sudo).
@@ -80,10 +79,14 @@ if id -u "$APP_USER" &>/dev/null; then log_warn "El usuario '$APP_USER' ya exist
     log_info "Creando usuario del sistema '$APP_USER'...";
     /usr/sbin/useradd --system --create-home --shell /bin/bash --home-dir "$CONFIG_DEST_DIR" "$APP_USER"
 fi
+
 log_info "Configurando sudo para el usuario 'rdp'..."
+# --- ¡CORRECCIÓN! ---
+/bin/mkdir -p /etc/sudoers.d
 SUDOERS_RDP_FILE="/etc/sudoers.d/010_rdp_user_permissions"
 echo "${APP_USER} ALL=(ALL) NOPASSWD: /home/rdp/rdp.sh, /sbin/shutdown, /sbin/reboot" > "$SUDOERS_RDP_FILE"
 /bin/chmod 0440 "$SUDOERS_RDP_FILE"
+
 log_info "Creando directorios y restableciendo contraseña de admin..."
 /bin/mkdir -p "$PUBLIC_DIR"
 echo "Rdpclient2026" > "$ADMIN_CONFIG_FILE"
@@ -121,9 +124,9 @@ fi
 log_info "Generando archivos del proyecto Node.js..."
 # package.json
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "13.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "13.1.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
-# index.js (Actualizado para manejar rdpSecurity)
+# index.js
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
 const { exec } = require('child_process');
@@ -144,7 +147,7 @@ async function configureAutologin(mode) { const overrideDir = `/etc/systemd/syst
 async function setConfigFileOwnership() { return runCommand(`/bin/chown -R ${LINUX_USER}:${LINUX_USER} ${CONFIG_DEST_DIR}`); }
 app.listen(PORT, '0.0.0.0', () => { console.log(`Backend de RDP Client 2026 escuchando en http://0.0.0.0:${PORT}`); });
 EOF
-# HTML (Actualizado con selector de seguridad)
+# HTML
 cat << 'EOF' > "${PUBLIC_DIR}/index.html"
 <!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RDP Client 2026</title><link rel="stylesheet" href="styles.css"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"></head><body><div id="toast-container"></div><div class="container"><div class="header-logo-container"><img src="logo.png" alt="Logo RDP Client 2026" class="header-logo"></div><div id="login-form-container"><h1>RDP Client 2026</h1><form id="login-form"><input type="text" id="admin-user" value="rdpadmin" required><input type="password" id="admin-pass" placeholder="Contraseña" required><button type="submit">Ingresar</button></form></div><div id="main-content" class="hidden"><h1>RDP Client 2026</h1><form id="main-form"><div class="form-grid"><fieldset><legend>Datos de Conexión RDP</legend><input type="text" id="rdp-server" name="rdpServer" placeholder="Servidor RDP (IP o Dominio)" required><input type="text" id="rdp-port" name="rdpPort" placeholder="Puerto RDP" value="3389" required><input type="text" id="rdp-user" name="rdpUser" placeholder="Usuario RDP" required><input type="password" id="rdp-pass" name="rdpPass" placeholder="Contraseña RDP (dejar en blanco para no cambiar)"><label for="rdp-security">Modo de Seguridad:</label><select id="rdp-security" name="rdpSecurity"><option value="nla" selected>NLA (Moderno, por defecto)</option><option value="rdp">RDP (Antiguo, compatible)</option></select></fieldset><fieldset><legend>Configuración Local</legend><input type="password" id="linux-pass" name="linuxPass" placeholder="Contraseña para 'rdp' (dejar en blanco para no cambiar)"><label for="autologin-mode">Auto-Login al iniciar:</label><select id="autologin-mode" name="autologinMode"><option value="text" selected>Habilitado</option><option value="none">Deshabilitado</option></select></fieldset></div><div class="action-buttons-container"><button type="submit">Aplicar Configuración</button><button type="button" id="change-pass-btn">Pass Admin</button><button type="button" id="change-hostname-btn">Hostname</button><button type="button" id="reboot-btn" class="danger-button">Reiniciar</button></div></form><hr><div class="footer"><p><a href="https://sourceforge.net/projects/rdpclient/" target="_blank">Proyecto RDP Client 2026 en SourceForge</a></p><p>Creado por Guillermo Sanchez | <a href="mailto:gsanchez@itsanchez.com.ar">gsanchez@itsanchez.com.ar</a></p></div></div></div><div id="password-modal" class="modal hidden"><div class="modal-content"><span class="close-button">×</span><h2>Cambiar Contraseña de Administrador</h2><form id="change-pass-form"><input type="password" id="new-admin-pass" placeholder="Nueva Contraseña (mín. 8 caracteres)" required><input type="password" id="confirm-admin-pass" placeholder="Confirmar Nueva Contraseña" required><button type="submit">Confirmar Cambio</button></form></div></div><div id="hostname-modal" class="modal hidden"><div class="modal-content"><span class="close-button">×</span><h2>Cambiar Hostname</h2><form id="change-hostname-form"><p>Hostname actual: <strong id="current-hostname"></strong></p><input type="text" id="new-hostname" placeholder="Nuevo hostname" required><button type="submit">Confirmar Cambio</button></form></div></div></body><script src="client.js"></script></html>
 EOF
@@ -152,7 +155,7 @@ EOF
 cat << 'EOF' > "${PUBLIC_DIR}/styles.css"
 :root{--bg-color:#121212;--surface-color:#1e1e1e;--primary-color:#bb86fc;--text-color:#e1e1e1;--border-color:#444;--error-color:#cf6679;--success-color:#03dac6;--danger-color:#f44336}body{font-family:'Inter',sans-serif;background-color:var(--bg-color);color:var(--text-color);margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}h1,h2{text-align:center;font-weight:700}.container{width:100%;max-width:800px;background-color:var(--surface-color);padding:2rem;border-radius:12px;box-shadow:0 10px 30px #0009;border:1px solid var(--border-color);z-index:10;}.header-logo-container{text-align:center;margin-bottom:1rem;}.header-logo{max-width:200px;height:auto;opacity:0.8;}input,select,button{width:100%;padding:14px;background-color:#2c2c2c;border:1px solid var(--border-color);border-radius:8px;color:var(--text-color);font-size:1rem;box-sizing:border-box;transition:all .2s ease}input:focus,select:focus{outline:0;border-color:var(--primary-color);box-shadow:0 0 0 3px #bb86fc40}button{background-color:var(--primary-color);color:#000;font-weight:500;cursor:pointer;font-size:0.9rem;}button:hover{filter:brightness(1.1)}button:disabled{background-color:#555;cursor:not-allowed}legend{color:var(--primary-color);font-weight:500;padding:0 10px}fieldset{border:1px solid var(--border-color);border-radius:8px;padding:1.5rem;margin:0;display:flex;flex-direction:column;gap:1rem}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-bottom:1.5rem}.action-buttons-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-top:1.5rem}.danger-button{background-color:var(--error-color);color:#fff}.hidden{display:none!important}hr{border:none;border-top:1px solid var(--border-color);margin:2rem 0 1rem 0;}.footer{text-align:center;font-size:0.9rem;color:#888}.footer a{color:var(--primary-color);text-decoration:none}.footer a:hover{text-decoration:underline}.modal{position:fixed;z-index:100;left:0;top:0;width:100%;height:100%;overflow:auto;background-color:#000000a0;display:flex;justify-content:center;align-items:center}.modal-content{background-color:var(--surface-color);margin:auto;padding:2rem;border:1px solid var(--border-color);width:90%;max-width:500px;border-radius:12px;position:relative;animation:modal-fade-in .3s}.close-button{color:#aaa;float:right;font-size:28px;font-weight:700;position:absolute;top:10px;right:20px}.close-button:hover,.close-button:focus{color:#fff;text-decoration:none;cursor:pointer}#toast-container{position:fixed;top:20px;right:20px;z-index:1000}.toast{background-color:#333;color:#fff;padding:1rem;border-radius:8px;margin-bottom:1rem;box-shadow:0 3px 10px #0009;opacity:0;transform:translateX(100%);animation:toast-in .5s forwards}.toast.success{background:linear-gradient(90deg,var(--success-color),#01b8a2)}.toast.error{background:linear-gradient(90deg,var(--error-color),#b84d60)}@keyframes toast-in{to{opacity:1;transform:translateX(0)}}@keyframes modal-fade-in{from{opacity:0;transform:translateY(-50px)}to{opacity:1;transform:translateY(0)}}
 EOF
-# client.js (Actualizado para manejar rdpSecurity)
+# client.js
 cat << 'EOF' > "${PUBLIC_DIR}/client.js"
 document.addEventListener('DOMContentLoaded', () => {
     const loginFormContainer = document.getElementById('login-form-container');
@@ -284,8 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 EOF
-
-# --- rdp.sh (¡LÓGICA DE SEGURIDAD AÑADIDA!) ---
+# rdp.sh
 cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
 #!/bin/bash
 if [ "$(id -u)" -ne 0 ]; then clear; echo "Error: Este script debe ser ejecutado con privilegios de root (sudo)."; sleep 20; exit 1; fi
@@ -296,22 +298,11 @@ while true; do
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "rdp.pass.enc" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then clear; echo "Error al descifrar la contraseña."; sleep 10; exit 1; fi
-    
-    # Construir la cadena de conexión del servidor
     SERVER_CONNECTION="/v:${RDP_SERVER}"
-    if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then
-        SERVER_CONNECTION="${SERVER_CONNECTION}:${RDP_PORT}"
-    fi
-    
-    # Determinar el modo de seguridad. Si no está definido, usar 'nla' como fallback seguro.
+    if [ -n "$RDP_PORT" ] && [ "$RDP_PORT" != "3389" ]; then SERVER_CONNECTION="${SERVER_CONNECTION}:${RDP_PORT}"; fi
     SECURITY_MODE=${RDP_SECURITY:-nla}
-
-    # Construir el comando final
     XFREERDP_CMD="/usr/bin/xfreerdp /u:$RDP_USER /p:$RDP_PASS ${SERVER_CONNECTION} /f /cert:ignore /sec:${SECURITY_MODE}"
-    
-    # Envolver el comando final en xinit
     /usr/bin/xinit $XFREERDP_CMD -- :1
-
     unset RDP_PASS
     clear; echo "================================="; echo "        SESIÓN FINALIZADA"; echo "================================="; echo ""; echo "  [1] Volver a conectar"; echo "  [2] Apagar el equipo"; echo ""; echo "================================="
     read -n 1 -p "Seleccione una opción: " opcion; echo ""
