@@ -1,4 +1,4 @@
-#!/bin-bash
+#!/bin/bash
 set -e
 APP_USER="rdp"
 APP_DIR="/opt/rdpclient"
@@ -76,7 +76,7 @@ if ! (wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW" &&
 fi
 log_info "Generando archivos del proyecto Node.js..."
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "14.3.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "14.2.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
@@ -89,30 +89,7 @@ app.use(express.static('public')); app.use(express.json());
 const runCommand = (command) => new Promise((resolve, reject) => { exec(command, (error, stdout, stderr) => { if (error) { console.error(`Error en comando: ${command}\n${stderr}`); return reject(new Error(`Falló un comando del sistema.`)); } resolve(stdout.trim()); }); });
 app.post('/login', async (req, res) => { try { const adminPassword = await fs.readFile(ADMIN_CONFIG_FILE, 'utf8'); if (req.body.username === 'rdpadmin' && req.body.password.trim() === adminPassword.trim()) { res.status(200).json({ message: 'Login exitoso' }); } else { res.status(401).json({ message: 'Credenciales incorrectas' }); } } catch (error) { res.status(500).json({ message: 'Error interno del servidor.' }); } });
 app.get('/get-config', async (req, res) => { try { const data = await fs.readFile(RDP_INI_PATH, 'utf8'); const config = {}; data.split('\n').forEach(line => { if (line.includes('=')) { const [key, value] = line.split('='); config[key.trim()] = value.trim().replace(/"/g, ''); } }); res.status(200).json({ rdpServer: config.RDP_SERVER || '', rdpPort: config.RDP_PORT || '3389', rdpUser: config.RDP_USER || '', rdpSecurity: config.RDP_SECURITY || 'nla' }); } catch (error) { res.status(200).json({ rdpServer: '', rdpPort: '3389', rdpUser: '', rdpSecurity: 'nla' }); } });
-app.post('/generate', async (req, res) => {
-    const rdpServer = req.body.rdpServer.trim();
-    const rdpPort = req.body.rdpPort.trim();
-    const rdpUser = req.body.rdpUser.trim();
-    const rdpPass = req.body.rdpPass;
-    const linuxPass = req.body.linuxPass;
-    const autologinMode = req.body.autologinMode;
-    const rdpSecurity = req.body.rdpSecurity;
-    try { 
-        const iniContent = `RDP_SERVER="${rdpServer}"\nRDP_PORT="${rdpPort || '3389'}"\nRDP_USER="${rdpUser}"\nRDP_SECURITY="${rdpSecurity || 'nla'}"\nENCRYPTED_PASS_FILE="rdp.pass.enc"`; 
-        await fs.writeFile(RDP_INI_PATH, iniContent); 
-        if (rdpPass) { 
-            const passphrase = 'tu-frase-secreta-maestra-muy-segura'; 
-            const encryptCommand = `/bin/echo -n '${rdpPass}' | /usr/bin/openssl enc -aes-256-cbc -pbkdf2 -a -salt -out ${path.join(CONFIG_DEST_DIR, 'rdp.pass.enc')} -pass pass:${passphrase}`; 
-            await runCommand(encryptCommand); 
-        } 
-        if (linuxPass) { 
-            await runCommand(`/bin/bash -c "/bin/echo '${LINUX_USER}:${linuxPass}' | /usr/sbin/chpasswd"`); 
-        } 
-        await configureAutologin(autologinMode); 
-        await setConfigFileOwnership(); 
-        res.status(200).json({ message: '¡Configuración aplicada con éxito!' }); 
-    } catch (error) { res.status(500).json({ message: error.message }); } 
-});
+app.post('/generate', async (req, res) => { const { rdpServer, rdpPort, rdpUser, rdpPass, linuxPass, autologinMode, rdpSecurity } = req.body; try { const iniContent = `RDP_SERVER="${rdpServer}"\nRDP_PORT="${rdpPort || '3389'}"\nRDP_USER="${rdpUser}"\nRDP_SECURITY="${rdpSecurity || 'nla'}"\nENCRYPTED_PASS_FILE="rdp.pass.enc"`; await fs.writeFile(RDP_INI_PATH, iniContent); if (rdpPass) { const passphrase = 'tu-frase-secreta-maestra-muy-segura'; const encryptCommand = `/bin/echo -n '${rdpPass}' | /usr/bin/openssl enc -aes-256-cbc -pbkdf2 -a -salt -out ${path.join(CONFIG_DEST_DIR, 'rdp.pass.enc')} -pass pass:${passphrase}`; await runCommand(encryptCommand); } if (linuxPass) { await runCommand(`/bin/bash -c "/bin/echo '${LINUX_USER}:${linuxPass}' | /usr/sbin/chpasswd"`); } await configureAutologin(autologinMode); await setConfigFileOwnership(); res.status(200).json({ message: '¡Configuración aplicada con éxito!' }); } catch (error) { res.status(500).json({ message: error.message }); } });
 app.post('/change-admin-password', async (req, res) => { if (!req.body.newPassword || req.body.newPassword.length < 8) { return res.status(400).json({ message: 'La contraseña debe tener al menos 8 caracteres.' }); } try { await fs.writeFile(ADMIN_CONFIG_FILE, req.body.newPassword); res.status(200).json({ message: 'Contraseña de administrador cambiada.' }); } catch (error) { res.status(500).json({ message: 'Error al escribir el archivo.' }); } });
 app.post('/reboot', (req, res) => { res.status(200).json({ message: 'Comando de reinicio enviado...' }); setTimeout(() => { runCommand('/sbin/reboot').catch(err => console.error("Fallo al reiniciar:", err)); }, 1000); });
 app.get('/get-hostname', async (req, res) => { try { const hostname = await runCommand('hostname'); res.status(200).json({ hostname }); } catch (error) { res.status(500).json({ message: 'No se pudo obtener el hostname.' }); } });
@@ -160,14 +137,29 @@ cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
 #!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 trap '' SIGINT
-if [ "$(id -u)" -ne 0 ]; then clear; echo -e "${RED}Error: Este script debe ser ejecutado con privilegios de root (sudo).${NC}"; sleep 20; exit 1; fi
+if [ "$(id -u)" -ne 0 ]; then
+    clear
+    echo -e "${RED}Error: Este script debe ser ejecutado con privilegios de root (sudo).${NC}"
+    sleep 20
+    exit 1
+fi
 while true; do
     RDP_HOME="/home/rdp"; CONFIG_FILE="${RDP_HOME}/rdp.ini"; PASS_FILE="${RDP_HOME}/rdp.pass.enc"
-    if [ ! -f "$CONFIG_FILE" ]; then clear; echo -e "${RED}Error: El archivo de configuración '$CONFIG_FILE' no se encuentra.${NC}"; sleep 20; exit 1; fi
+    if [ ! -f "$CONFIG_FILE" ]; then
+        clear
+        echo -e "${RED}Error: El archivo de configuración '$CONFIG_FILE' no se encuentra.${NC}"
+        sleep 20
+        exit 1
+    fi
     source "$CONFIG_FILE"
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "$PASS_FILE" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
-    if [ -z "$RDP_PASS" ]; then clear; echo -e "${RED}Error al descifrar la contraseña. Verifique la configuración.${NC}"; sleep 10; continue; fi
+    if [ -z "$RDP_PASS" ]; then
+        clear
+        echo -e "${RED}Error al descifrar la contraseña. Verifique la configuración.${NC}"
+        sleep 10
+        continue
+    fi
     SERVER_CONNECTION="/v:${RDP_SERVER}:${RDP_PORT}"
     SECURITY_MODE=${RDP_SECURITY:-nla}
     LOG_FILE="/tmp/xrdp_run.log"
