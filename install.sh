@@ -76,7 +76,7 @@ if ! (wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW" &&
 fi
 log_info "Generando archivos del proyecto Node.js..."
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "16.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "16.1.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
@@ -155,12 +155,10 @@ while true; do
     if grep -q "DISCONNECT_BY_USER" "$LOG_FILE"; then
         echo -e "${GREEN}=================================${NC}\n        ${GREEN}SESIÓN FINALIZADA${NC}\n${GREEN}=================================${NC}"
     else
-        CMD_FOR_LOG="/usr/bin/xfreerdp /u:\"$RDP_USER\" /p:\"********\" \"${SERVER_CONNECTION}\" /f /cert:ignore /sec:${SECURITY_MODE}"
         echo -e "${RED}=================================================================${NC}"
         echo -e "          ${RED}ERROR DE CONEXIÓN${NC}"
         echo -e "${RED}=================================================================${NC}"
         echo -e "\n  El cliente RDP terminó con un error."
-        echo -e "\n  ${YELLOW}Comando ejecutado:${NC}\n  ${CMD_FOR_LOG}"
         echo -e "\n  ${YELLOW}Detalles del log:${NC}"
         echo -e "${YELLOW}-----------------------------------------------------------------${NC}"
         tail -n 20 "$LOG_FILE"
