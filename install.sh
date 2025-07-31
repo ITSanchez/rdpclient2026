@@ -76,7 +76,7 @@ if ! (wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW" &&
 fi
 log_info "Generando archivos del proyecto Node.js..."
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "14.1.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "16.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
@@ -149,7 +149,7 @@ while true; do
     SECURITY_MODE=${RDP_SECURITY:-nla}
     LOG_FILE="/tmp/xrdp_run.log"
     XFREERDP_CMD="/usr/bin/xfreerdp /u:\"${RDP_USER}\" /p:\"${RDP_PASS}\" \"${SERVER_CONNECTION}\" /f /cert:ignore /sec:${SECURITY_MODE}"
-    eval /usr/bin/xinit $XFREERDP_CMD -- :1 > "$LOG_FILE" 2>&1
+    /usr/bin/xinit $XFREERDP_CMD -- :1 > "$LOG_FILE" 2>&1
     unset RDP_PASS
     clear
     if grep -q "DISCONNECT_BY_USER" "$LOG_FILE"; then
