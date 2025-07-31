@@ -1,4 +1,5 @@
-![RDP Client 2026](https://github.com/ITSanchez/rdpclient2026/main/web-logo.png)
+![Logo](https://raw.githubusercontent.com/ITSanchez/rdpclient2026/main/web-logo.png)
+
 # RDP Client 2026
 Converti una instalacion minima de Debian 12 en un ThingClient RDP 
 
