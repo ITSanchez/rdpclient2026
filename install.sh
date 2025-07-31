@@ -23,12 +23,12 @@ else
 fi
 log_info "Sistema operativo verificado: Debian 12 (bookworm)."
 log_info "Verificando dependencias del sistema..."
-REQUIRED_PACKAGES=(xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common)
+REQUIRED_PACKAGES="xserver-xorg xserver-xorg-video-all xinit freerdp2-x11 sudo wget ca-certificates grub2-common"
 log_info "Actualizando índice de paquetes..."
 apt-get update >/dev/null 2>&1
 log_info "Instalando paquetes necesarios..."
 log_warn "Esto puede demorar unos minutos..."
-apt-get install -y "${REQUIRED_PACKAGES[@]}" >/dev/null 2>&1
+apt-get install -y $REQUIRED_PACKAGES >/dev/null 2>&1
 log_info "Todas las dependencias del sistema están presentes."
 log_info "Verificando instalación de Node.js..."
 if command -v node &> /dev/null; then log_info "Node.js ya está instalado (versión $(node -v))."; else
@@ -76,7 +76,7 @@ if ! (wget --quiet --no-check-certificate -O "$LOGO_PATH_WEB" "$LOGO_URL_RAW" &&
 fi
 log_info "Generando archivos del proyecto Node.js..."
 cat << 'EOF' > "${APP_DIR}/package.json"
-{ "name": "rdp-client-2026", "version": "14.3.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
+{ "name": "rdp-client-2026", "version": "15.0.0", "description": "Consola de Administración para RDP Client 2026", "main": "index.js", "scripts": { "start": "node index.js" }, "dependencies": { "express": "^4.19.2" } }
 EOF
 cat << 'EOF' > "${APP_DIR}/${NODE_APP_FILE}"
 const express = require('express');
