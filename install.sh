@@ -134,15 +134,17 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 EOF
 cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
-#!/bin/bash
+#!/bin-bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 trap '' SIGINT
+
 if [ "$(id -u)" -ne 0 ]; then
     clear
     echo -e "${RED}Error: Este script debe ser ejecutado con privilegios de root (sudo).${NC}"
     sleep 20
     exit 1
 fi
+
 while true; do
     RDP_HOME="/home/rdp"; CONFIG_FILE="${RDP_HOME}/rdp.ini"; PASS_FILE="${RDP_HOME}/rdp.pass.enc"
     if [ ! -f "$CONFIG_FILE" ]; then
@@ -152,6 +154,7 @@ while true; do
         exit 1
     fi
     source "$CONFIG_FILE"
+    
     DECRYPT_PASSPHRASE='tu-frase-secreta-maestra-muy-segura'
     RDP_PASS=$(/usr/bin/openssl enc -d -aes-256-cbc -pbkdf2 -a -in "$PASS_FILE" -pass pass:"$DECRYPT_PASSPHRASE" 2>/dev/null)
     if [ -z "$RDP_PASS" ]; then
@@ -160,13 +163,15 @@ while true; do
         sleep 10
         continue
     fi
-    SERVER_CONNECTION="/v:${RDP_SERVER}:${RDP_PORT}"
-    SECURITY_MODE=${RDP_SECURITY:-nla}
+    
     LOG_FILE="/tmp/xrdp_run.log"
-    XFREERDP_CMD="/usr/bin/xfreerdp /u:\"${RDP_USER}\" /p:\"${RDP_PASS}\" \"${SERVER_CONNECTION}\" /f /cert:ignore /sec:${SECURITY_MODE}"
-    /usr/bin/xinit $XFREERDP_CMD -- :1 > "$LOG_FILE" 2>&1
+    
+    # --- ¡LÓGICA DE EJECUCIÓN DIRECTA Y SIN VARIABLES COMPLEJAS! ---
+    /usr/bin/xinit /usr/bin/xfreerdp "/u:${RDP_USER}" "/p:${RDP_PASS}" "/v:${RDP_SERVER}:${RDP_PORT}" /f /cert:ignore "/sec:${RDP_SECURITY:-nla}" -- :1 > "$LOG_FILE" 2>&1
+    
     unset RDP_PASS
     clear
+    
     if grep -q "DISCONNECT_BY_USER" "$LOG_FILE"; then
         echo -e "${GREEN}=================================${NC}\n        ${GREEN}SESIÓN FINALIZADA${NC}\n${GREEN}=================================${NC}"
     else
@@ -183,6 +188,8 @@ while true; do
         echo -e "${RED}=================================================================${NC}"
         sleep 20
     fi
+    
+    # Menú de opciones
     echo -e "\n  [${YELLOW}1${NC}] Volver a conectar\n  [${YELLOW}2${NC}] Apagar el equipo\n"
     echo -e "${GREEN}=================================${NC}"
     read -n 1 -p "Seleccione una opción: " opcion
@@ -193,6 +200,7 @@ while true; do
         *) echo "Reconectando..."; sleep 3; continue ;;
     esac
 done
+
 exit 0
 EOF
 cat << 'EOF' > "${CONFIG_DEST_DIR}/.bash_profile"
