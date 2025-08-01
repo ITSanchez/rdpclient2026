@@ -134,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 EOF
 cat << 'EOF' > "${CONFIG_DEST_DIR}/rdp.sh"
-#!/bin-bash
+#!/bin/bash
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 trap '' SIGINT
 
