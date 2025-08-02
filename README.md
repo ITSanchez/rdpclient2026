@@ -5,6 +5,13 @@
 # RDP Client 2026
 Converti una instalacion minima de Debian 12 en un ThingClient RDP 
 
+## 🎥 Video demostrativo
+
+Mirá cómo funciona RDP Client 2026 en esta demo completa:
+
+[![Ver en YouTube](https://img.youtube.com/vi/8mDTagR0aKs/hqdefault.jpg)](https://www.youtube.com/watch?v=8mDTagR0aKs)
+
+
 # Requerimientos
 * El equipo tiene que tener internet durante la instalalacion
 * Se debe ejecutar como **root**
